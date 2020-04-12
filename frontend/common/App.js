@@ -83,17 +83,17 @@ const Animation = styled.div.attrs(props => ({
   animation: anim ${p => p.duration}s steps(1) infinite;
 /* Animation keyframes for the sprite */
 @keyframes anim {
-  ${p => p.frames.map((f, i) => `${100 * i / p.frames.length}% { background-position: ${p.vertical ? '0 ' + (-f * p.height) + 'px;' : (-f * p.width) + 'px 0;'} }`).join(' ')}
+  ${p => p.frames.map((f,i) => `${100 * i / p.frames.length}% { background-position: ${p.vertical ? '0 '+(-f * p.height)+'px;' : (-f * p.width)+'px 0;' } }`).join(' ')}
 }
 `
 
 function dataURLtoBlob(dataurl) {
-  var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-    bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
+    var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], {type:mime});
 }
 
 class App extends React.Component {
@@ -139,7 +139,7 @@ class App extends React.Component {
 
   componentDidMount() {
     this.customVcc.register('50%', '100vh');
-    this.updateFrames()
+    //this.updateFrames()
   }
 
   updateFrames() {
@@ -148,7 +148,7 @@ class App extends React.Component {
     let i = 0;
     let cropper = new Cropper(this.refs.current, {
       ready: async () => {
-        for (; i < frameCount; i++) {
+        for (; i<frameCount; i++) {
           let [x, y] = [0, 0]
           if (vertical)
             y = i * height
@@ -160,7 +160,7 @@ class App extends React.Component {
       },
       crop: async () => {
         const { width: W } = cropper.getData(true)
-        if (W === width) {
+        if ( W === width) {
           frameSrc.push(cropper.getCroppedCanvas().toDataURL())
         }
         if (i >= frameCount - 1) {
@@ -246,21 +246,27 @@ class App extends React.Component {
   saveSpritesheet() {
     if (this.state.uploading)
       return
-    if (this.state.current.startsWith('data')) {  // data-url
-      this.setState({ uploading: true })
-      this.customVcc.uploadFile(dataURLtoBlob(this.state.current), this.state.name + '.png', (url) => {
+    // data url
+    if (this.state.current.startsWith('data')) {
+    this.setState({ uploading: true })
+    //const canvas = this.refs.merge;
+    //window.requestAnimationFrame(() => {
+    //canvas.toBlob((blob) =>
+      this.customVcc.uploadFile(dataURLtoBlob(this.state.current), this.state.name+'.png', (url) => {
         this.saveValue(url)
-        this.setState({ uploading: false })
+        this.setState({uploading: false})
       })
-    } else if ((this.state.current.match(/\.(jpeg|jpg|webm|png)$/) != null)) {  // image url
-      this.saveValue(this.state.current)
+    } else if ((this.state.current.match(/\.(jpeg|jpg|webm|png)$/) != null)) {
+        this.saveValue(this.state.current)
     }
+    //)
+    //})
   }
 
   saveValue(url) {
-    this.setState({ value: url, current: url })
-    this.customVcc.change(url);
-    this.customVcc.save();
+        this.setState({ value: url, current: url })
+        this.customVcc.change(url);
+        this.customVcc.save();
   }
 
   render() {
