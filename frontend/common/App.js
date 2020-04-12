@@ -83,7 +83,7 @@ const Animation = styled.div.attrs(props => ({
   animation: anim ${p => p.duration}s steps(1) infinite;
 /* Animation keyframes for the sprite */
 @keyframes anim {
-  ${p => p.frames.map((f,i) => `${100*i/p.frames.length}% { background-position: ${-i*p.width}px 0;}`).join(' ') }
+  ${p => p.frames.map((f, i) => `${100 * i / p.frames.length}% { background-position: ${-i * p.width}px 0;}`).join(' ')}
 }
 `
 
@@ -106,8 +106,8 @@ class App extends React.Component {
         default: "https://images.koji-cdn.com/baa36116-cd5c-4c4d-b826-73e36747d979/zjywo-atlas.png",
         boundShape: 'circle',
         boundProps: { cx: 50, cy: 25, r: 25 },
-        duration: 2,
-        frames: [0,1,2,3]
+        duration: 4,
+        frames: [0, 1, 2, 3]
       },
       name: "",
       value: "https://images.koji-cdn.com/baa36116-cd5c-4c4d-b826-73e36747d979/zjywo-atlas.png",
@@ -164,21 +164,18 @@ class App extends React.Component {
   }
 
   resetDefault() {
-    this.setState({ value: this.state.options.default })
-    this.updateFrames()
+    this.setState({ value: this.state.options.default }, this.updateFrames)
   }
 
+
   crop() {
-    this.customVcc.showModal('image', this.state.value, (newUrl) => {
-      // change and save VCC to use the new URL value
-    });
     const cropper = this.refs.imagecrop.refs.cropper
     cropper.crop()
     const { width, height } = this.state.options
     const v = cropper.getCroppedCanvas({ width, height, imageSmoothingQuality: 'hight' }).toDataURL()
     let frameSrc = [...this.state.frameSrc]
     frameSrc[this.state.activeFrame] = v
-    this.setState({ frameSrc })
+    this.setState({ frameSrc }, this.mergeFrames)
   }
 
   handleImage(e) {
@@ -202,13 +199,10 @@ class App extends React.Component {
   }
 
   mergeFrames() {
-    if (this.state.uploading)
-      return
-    this.setState({uploading: true})
-    const canvas = this.refs.merge;
     const { width, height, frameCount, vertical } = this.state.options
+    const canvas = this.refs.merge;
     canvas.width = vertical ? width : frameCount * width;
-    canvas.height = vertical ? frameCount*height : height;
+    canvas.height = vertical ? frameCount * height : height;
     let context = canvas.getContext('2d');
     //console.log(this.refs.frames)
     //this.refs.frames.childNodes.forEach((node, i) => {
@@ -225,56 +219,78 @@ class App extends React.Component {
       img.onload = () => {
         context.drawImage(img, x, y);
         if (i === frameCount - 1) {
-          window.requestAnimationFrame(() => {
-            canvas.toBlob((blob) =>
-              this.customVcc.uploadFile(blob, this.state.name, (url) => {
-                this.setState({ value: url, uploading: false })
-              })
-            )
-          })
+          window.requestAnimationFrame(() => this.setState({ value: canvas.toDataURL() }))
         }
       };
       //  context.drawImage(node.childNodes[0], x, y);
     }//);
   }
 
+  uploadSpritesheet() {
+    if (this.state.uploading)
+      return
+    this.setState({ uploading: true })
+    this.customVcc.showModal('image', this.state.value, (url) => {
+      this.setState({ value: url, uploading: false }, this.updateFrames)
+      this.customVcc.change({ value: url });
+      this.customVcc.save();
+    });
+  }
+
+  saveSpritesheet() {
+    if (this.state.uploading)
+      return
+    this.setState({ uploading: true })
+    const canvas = this.refs.merge;
+    //window.requestAnimationFrame(() => {
+    canvas.toBlob((blob) =>
+      this.customVcc.uploadFile(blob, this.state.name, (url) => {
+        this.setState({ value: url, uploading: false })
+        this.customVcc.change({ value: url });
+        this.customVcc.save();
+      })
+    )
+    //})
+  }
+
   render() {
     const Shape = this.state.options.boundShape
-    const {width,height,duration,frames,boundProps} = this.state.options
+    const { width, height, duration, frames, boundProps } = this.state.options
     return (
       <Container>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', backgroundColor: '#cccc', fontSize: '0.8em' }}>
           <div ref="frames" data-tip="Select a frame to modify">
-          {this.state.frameSrc.map((src, i) => (
-            <svg onClick={() => this.setState({ activeFrame: i })} key={i} width={width} height={height}
-              style={{ minWidth: width, border: '2px ' + (i === this.state.activeFrame ? 'solid red' : 'solid black') }}
-              version="1.1" xmlns="http://www.w3.org/2000/svg">
-              <image width={width} height={height} href={src}></image>
-              {this.state.showBounds && <Shape {...boundProps} stroke="red" fill="transparent" strokeWidth="1"></Shape>}
-            </svg>
-          ))}
+            {this.state.frameSrc.map((src, i) => (
+              <svg onClick={() => this.setState({ activeFrame: i })} key={i} width={width} height={height}
+                style={{ minWidth: width, border: '2px ' + (i === this.state.activeFrame ? 'solid red' : 'solid black') }}
+                version="1.1" xmlns="http://www.w3.org/2000/svg">
+                <image width={width} height={height} href={src}></image>
+                {this.state.showBounds && <Shape {...boundProps} stroke="red" fill="transparent" strokeWidth="1"></Shape>}
+              </svg>
+            ))}
           </div>
           <Animation src={this.state.value} duration={duration} frames={frames} width={width} height={height}></Animation>
-          <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
-            <Button onClick={this.resetDefault.bind(this)} data-tip='If you messed up, reset default image'>!!! Reset Default</Button>
-            <label><Checkbox checked={this.state.showBounds} onChange={(e) => this.setState({ showBounds: e.target.checked })}></Checkbox>Show bounding box</label>
-          </div>
-          <div style={{display: 'none'}}>
-            <p style={{ margin: 0 }}>Current Spritesheet: ("Save SpriteSheet" to change)</p>
-            <img ref="value" src={this.state.value}></img>
-            <canvas ref="merge" style={{ display: 'none' }}></canvas>
-          </div>
-        </div>
-        <div>
-          <ButtonLabel data-tip='Open an image to crop a frame from'>Select Image<FileInput id="file" onChange={this.handleImage.bind(this)}></FileInput></ButtonLabel>
-          <label>x:<NumberInput id="x" value={this.state.data.x} onChange={this.handleData.bind(this)}></NumberInput></label>
-          <label>y:<NumberInput id="y" value={this.state.data.y} onChange={this.handleData.bind(this)}></NumberInput></label>
-          <label>width:<NumberInput id="width" value={this.state.data.width} onChange={this.handleData.bind(this)}></NumberInput></label>
-          <label>height:<NumberInput id="height" value={this.state.data.height} onChange={this.handleData.bind(this)}></NumberInput></label>
-          <Button onClick={this.crop.bind(this)} data-tip="Set cropped image to current frame">Crop Frame</Button>
-          <Button style={{position: 'relative'}} onClick={this.mergeFrames.bind(this)} data-tip="Upload final spritesheet">Save SpriteSheet
+          <Button style={{ position: 'relative' }} onClick={this.saveSpritesheet.bind(this)}
+            data-tip="Upload a SpriteSheet directly from your PC or Internet">Upload SpriteSheet
             {this.state.uploading && <Loading>Uploading...</Loading>}
           </Button>
+          <label><Checkbox checked={this.state.showBounds} onChange={(e) => this.setState({ showBounds: e.target.checked })}></Checkbox>Show bounding box</label>
+          <Button onClick={this.resetDefault.bind(this)} data-tip='If you messed up, reset default image'>!!! Reset Default</Button>
+          <div style={{ display: 'none' }}>
+            <img ref="value" src={this.state.value}></img>
+            <canvas ref="merge" style={{ display: 'block' }}></canvas>
+          </div>
+          <div>
+            <ButtonLabel data-tip='Open an image to crop a frame from'>Select Image<FileInput id="file" onChange={this.handleImage.bind(this)}></FileInput></ButtonLabel>
+            <label>x:<NumberInput id="x" value={this.state.data.x} onChange={this.handleData.bind(this)}></NumberInput></label>
+            <label>y:<NumberInput id="y" value={this.state.data.y} onChange={this.handleData.bind(this)}></NumberInput></label>
+            <label>width:<NumberInput id="width" value={this.state.data.width} onChange={this.handleData.bind(this)}></NumberInput></label>
+            <label>height:<NumberInput id="height" value={this.state.data.height} onChange={this.handleData.bind(this)}></NumberInput></label>
+            <Button onClick={this.crop.bind(this)} data-tip="Set cropped image to current frame">Crop Frame</Button>
+            <Button style={{ position: 'relative' }} onClick={this.saveSpritesheet.bind(this)} data-tip="Save & upload final spritesheet">Save SpriteSheet
+            {this.state.uploading && <Loading>Uploading...</Loading>}
+            </Button>
+          </div>
         </div>
         <ImageCrop ref="imagecrop" cropend={this.handleData.bind(this)} src={this.state.activeImage} width={width} height={height}></ImageCrop>
         <ReactTooltip multiline={true} />
