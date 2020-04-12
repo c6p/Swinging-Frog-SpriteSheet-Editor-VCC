@@ -83,12 +83,17 @@ const Animation = styled.div.attrs(props => ({
   animation: anim ${p => p.duration}s steps(1) infinite;
 /* Animation keyframes for the sprite */
 @keyframes anim {
-  ${p => p.frames.map((f, i) => `${100 * i / p.frames.length}% { background-position: ${-i * p.width}px 0;}`).join(' ')}
+  ${p => p.frames.map((f, i) => `${100 * i / p.frames.length}% { background-position: ${p.vertical ? '0 ' + (-f * p.height) + 'px;' : (-f * p.width) + 'px 0;'} }`).join(' ')}
 }
 `
 
-function resize(arr, newSize, defaultValue) {
-  return [...arr, ...Array(Math.max(newSize - arr.length, 0)).fill(defaultValue)];
+function dataURLtoBlob(dataurl) {
+  var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+    bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
 }
 
 class App extends React.Component {
@@ -106,7 +111,7 @@ class App extends React.Component {
         default: "https://images.koji-cdn.com/baa36116-cd5c-4c4d-b826-73e36747d979/zjywo-atlas.png",
         boundShape: 'circle',
         boundProps: { cx: 50, cy: 25, r: 25 },
-        duration: 4,
+        duration: 3,
         frames: [0, 1, 2, 3]
       },
       name: "",
@@ -126,9 +131,8 @@ class App extends React.Component {
           ...this.state,
           ...newProps,
           current: newProps.value
-        });
+        }, this.updateFrames);
       }
-      this.updateFrames()
     });
 
   }
@@ -143,21 +147,23 @@ class App extends React.Component {
     let frameSrc = []
     let i = 0;
     let cropper = new Cropper(this.refs.current, {
-      crop: () => {
-        // workaround
-        const { x: X, width: W } = cropper.getData(true)
-        if (X === i * width && W === width) {
-          frameSrc.push(cropper.getCroppedCanvas().toDataURL())
-          i++
-        }
-        if (i < frameCount) {
+      ready: async () => {
+        for (; i < frameCount; i++) {
           let [x, y] = [0, 0]
           if (vertical)
             y = i * height
           else
             x = i * width
-          cropper.setData({ x, y, width, height }).crop()
-        } else {
+          cropper.setData({ x, y, width, height });
+          await cropper.crop()
+        }
+      },
+      crop: async () => {
+        const { width: W } = cropper.getData(true)
+        if (W === width) {
+          frameSrc.push(cropper.getCroppedCanvas().toDataURL())
+        }
+        if (i >= frameCount - 1) {
           this.setState({ frameSrc })
           cropper.destroy()
         }
@@ -232,7 +238,7 @@ class App extends React.Component {
     this.setState({ uploading: true })
     this.customVcc.showModal('image', this.state.value, (url) => {
       this.setState({ value: url, current: url, uploading: false }, this.updateFrames)
-      this.customVcc.change({ value: url });
+      this.customVcc.change(url);
       this.customVcc.save();
     });
   }
@@ -240,22 +246,26 @@ class App extends React.Component {
   saveSpritesheet() {
     if (this.state.uploading)
       return
-    this.setState({ uploading: true })
-    const canvas = this.refs.merge;
-    //window.requestAnimationFrame(() => {
-    canvas.toBlob((blob) =>
-      this.customVcc.uploadFile(blob, this.state.name, (url) => {
-        this.setState({ value: url, current: url, uploading: false })
-        this.customVcc.change({ value: url });
-        this.customVcc.save();
+    if (this.state.current.startsWith('data')) {  // data-url
+      this.setState({ uploading: true })
+      this.customVcc.uploadFile(dataURLtoBlob(this.state.current), this.state.name + '.png', (url) => {
+        this.saveValue(url)
+        this.setState({ uploading: false })
       })
-    )
-    //})
+    } else if ((this.state.current.match(/\.(jpeg|jpg|webm|png)$/) != null)) {  // image url
+      this.saveValue(this.state.current)
+    }
+  }
+
+  saveValue(url) {
+    this.setState({ value: url, current: url })
+    this.customVcc.change(url);
+    this.customVcc.save();
   }
 
   render() {
     const Shape = this.state.options.boundShape
-    const { width, height, duration, frames, boundProps } = this.state.options
+    const { width, height, duration, frames, vertical, boundProps } = this.state.options
     return (
       <Container>
         <div style={{ display: 'none' }}>
@@ -276,9 +286,9 @@ class App extends React.Component {
             </div>
             <label><Checkbox checked={this.state.showBounds} onChange={(e) => this.setState({ showBounds: e.target.checked })}></Checkbox>Show bounding box</label>
           </div>
-          <Animation src={this.state.current} duration={duration} frames={frames} width={width} height={height}></Animation>
+          <Animation src={this.state.current} duration={duration} frames={frames} vertical={vertical} width={width} height={height}></Animation>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <Button style={{ position: 'relative' }} onClick={this.saveSpritesheet.bind(this)}
+            <Button style={{ position: 'relative' }} onClick={this.uploadSpritesheet.bind(this)}
               data-tip="Upload a SpriteSheet directly from your PC or Internet">Upload SpriteSheet
             {this.state.uploading && <Loading>Uploading...</Loading>}
             </Button>
