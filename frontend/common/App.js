@@ -241,6 +241,7 @@ class App extends React.Component {
       this.customVcc.change(url);
       this.customVcc.save();
     });
+    this.setState({ uploading: false })
   }
 
   saveSpritesheet() {
